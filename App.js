@@ -3,6 +3,7 @@ import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import AgendaScreen from './src/screens/AgendaScreen';
@@ -33,13 +34,15 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <View style={{ flex: 1 }}>
-          {renderScreen()}
-        </View>
+          <View style={{ flex: 1 }}>
+            {renderScreen()}
+          </View>
 
-        <BottomNav current={screen} onChange={setScreen} />
-      </View>
+          <BottomNav current={screen} onChange={setScreen} />
+        </View>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
