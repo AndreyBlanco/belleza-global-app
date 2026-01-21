@@ -1,5 +1,9 @@
+import 'react-native-gesture-handler';
+
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import DashboardScreen from './src/screens/DashboardScreen';
 import AgendaScreen from './src/screens/AgendaScreen';
 import ClientsScreen from './src/screens/ClientsScreen';
@@ -28,12 +32,14 @@ export default function App() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1 }}>
-        {renderScreen()}
-      </View>
+        <View style={{ flex: 1 }}>
+          {renderScreen()}
+        </View>
 
-      <BottomNav current={screen} onChange={setScreen} />
-    </View>
+        <BottomNav current={screen} onChange={setScreen} />
+      </View>
+    </GestureHandlerRootView>
   );
 }

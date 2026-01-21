@@ -7,9 +7,8 @@ import {
   Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SvgUri } from 'react-native-svg';
-import { Asset } from 'expo-asset';
 import { Colors } from '../theme/colors';
+import { Image } from 'react-native';
 import {
   getAppointmentsByDate,
   getNextAppointmentsToday,
@@ -18,10 +17,6 @@ import {
 
 const { width } = Dimensions.get('window');
 const LOGO_WIDTH = width * 0.7;
-
-const logo = Asset.fromModule(
-  require('../../assets/logo.svg')
-).uri;
 
 const getLocalDateString = (date = new Date()) => {
   const y = date.getFullYear();
@@ -99,11 +94,13 @@ export default function DashboardScreen() {
 
       {/* HEADER */}
       <View style={styles.header}>
-        <SvgUri
-          uri={logo}
-          width={LOGO_WIDTH}
-          height={LOGO_WIDTH / 1.4}
-          fill="#FFFFFF"
+        <Image
+          source={require('../../assets/logo.png')}
+          style={{
+            width: LOGO_WIDTH,
+            height: LOGO_WIDTH / 1.4
+          }}
+          resizeMode="contain"
         />
 
         <Text style={styles.welcome}>BIENVENIDA</Text>
