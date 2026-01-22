@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { SvgUri } from 'react-native-svg';
 import { Asset } from 'expo-asset';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 
 const icons = {
@@ -11,6 +12,8 @@ const icons = {
 };
 
 export default function BottomNav({ current, onChange }) {
+  const insets = useSafeAreaInsets();
+
   const renderButton = (screen) => {
     const isActive = current === screen;
 
@@ -31,7 +34,12 @@ export default function BottomNav({ current, onChange }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        { paddingBottom: insets.bottom }
+      ]}
+    >
       {renderButton('dashboard')}
       {renderButton('agenda')}
       {renderButton('clients')}
@@ -42,11 +50,11 @@ export default function BottomNav({ current, onChange }) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    height: 70,
     backgroundColor: Colors.primary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
+    paddingTop: 14,
     alignItems: 'center',
     justifyContent: 'space-between'
   },
