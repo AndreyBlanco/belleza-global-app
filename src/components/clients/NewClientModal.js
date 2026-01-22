@@ -1,3 +1,4 @@
+// NewClientModal.js
 import React, { useState } from 'react';
 import {
   Modal,
@@ -5,10 +6,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet
+  StyleSheet,
+  Alert
 } from 'react-native';
 import { Colors } from '../../theme/colors';
-import { insertClient } from '../../database/database';
+import { insertClient, getClients } from '../../database/database';
 import ImportContactModal from './ImportContactModal';
 
 export default function NewClientModal({ visible, onClose, onSaved }) {
@@ -24,8 +26,27 @@ export default function NewClientModal({ visible, onClose, onSaved }) {
     setShowImport(false);
   };
 
+  const nameExists = async (value) => {
+    const clients = await getClients();
+    const normalized = value.trim().toLowerCase();
+    return clients.some(
+      c => c.name.trim().toLowerCase() === normalized
+    );
+  };
+
   const save = async () => {
-    if (!name || !phone) return;
+    if (!name || !phone) {
+      Alert.alert('Campos requeridos', 'Nombre y teléfono son obligatorios.');
+      return;
+    }
+
+    if (await nameExists(name)) {
+      Alert.alert(
+        'Nombre duplicado',
+        'Ya existe un cliente con este nombre.'
+      );
+      return;
+    }
 
     const createdClient = await insertClient(
       name.trim(),
@@ -39,6 +60,14 @@ export default function NewClientModal({ visible, onClose, onSaved }) {
   };
 
   const importContact = async (contact) => {
+    if (await nameExists(contact.name)) {
+      Alert.alert(
+        'Nombre duplicado',
+        'Ya existe un cliente con este nombre.'
+      );
+      return;
+    }
+
     const createdClient = await insertClient(
       contact.name,
       contact.phone,

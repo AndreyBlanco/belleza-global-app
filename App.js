@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AgendaScreen from './src/screens/AgendaScreen';
 import ClientsScreen from './src/screens/ClientsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import BottomNav from './src/components/BottomNav';
 import { initDatabase } from './src/database/database';
 
@@ -27,6 +28,8 @@ export default function App() {
         return <AgendaScreen />;
       case 'clients':
         return <ClientsScreen />;
+      case 'settings':
+        return <SettingsScreen />;
       default:
         return <DashboardScreen />;
     }

@@ -1,3 +1,4 @@
+// BottomNav.js
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,7 +7,8 @@ import { Colors } from '../theme/colors';
 const icons = {
   dashboard: require('../../assets/icons/home.png'),
   agenda: require('../../assets/icons/agenda.png'),
-  clients: require('../../assets/icons/clients.png')
+  clients: require('../../assets/icons/clients.png'),
+  settings: require('../../assets/icons/settings.png') // ⚙️ Configuración
 };
 
 export default function BottomNav({ current, onChange }) {
@@ -25,9 +27,7 @@ export default function BottomNav({ current, onChange }) {
           source={icons[screen]}
           style={[
             styles.icon,
-            {
-              opacity: isActive ? 1 : 0.6
-            }
+            { opacity: isActive ? 1 : 0.6 }
           ]}
           resizeMode="contain"
         />
@@ -45,6 +45,7 @@ export default function BottomNav({ current, onChange }) {
       {renderButton('dashboard')}
       {renderButton('agenda')}
       {renderButton('clients')}
+      {renderButton('settings')}
     </View>
   );
 }

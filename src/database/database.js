@@ -21,6 +21,8 @@ const getDatabase = async () => {
   return db;
 };
 
+export { getDatabase };
+
 /**
  * ✅ GUARANTEED DB INITIALIZATION
  * - Runs once
@@ -52,7 +54,29 @@ export const initDatabase = async () => {
         created_at TEXT NOT NULL,
         FOREIGN KEY (client_id) REFERENCES clients(id)
       );
+
+      /* ✅ APP SETTINGS (WORK HOURS) */
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id INTEGER PRIMARY KEY NOT NULL,
+        work_start TEXT NOT NULL,
+        work_end TEXT NOT NULL
+      );
     `);
+
+    /* ✅ INITIALIZE DEFAULT WORK HOURS (RUNS ONCE) */
+    const settingsRow = await database.getFirstAsync(
+      'SELECT id FROM app_settings LIMIT 1'
+    );
+
+    if (!settingsRow) {
+      await database.runAsync(
+        `
+        INSERT INTO app_settings (id, work_start, work_end)
+        VALUES (1, ?, ?)
+        `,
+        ['09:00', '18:00']
+      );
+    }
 
     initialized = true;
     console.log('[DB] Initialized ✅');
@@ -203,6 +227,7 @@ export const getNextAppointmentsToday = async (limit = 3) => {
     LEFT JOIN clients c ON a.client_id = c.id
     WHERE a.date = ?
       AND a.time >= ?
+      AND a.status IN ('confirmed', 'pending')
     ORDER BY a.time ASC
     LIMIT ?
     `,
@@ -271,6 +296,7 @@ export const getNextClientAppointment = async (clientId) => {
     SELECT *
     FROM appointments
     WHERE client_id = ?
+      AND status IN ('confirmed', 'pending')
       AND (
         date > ?
         OR (date = ? AND time >= ?)

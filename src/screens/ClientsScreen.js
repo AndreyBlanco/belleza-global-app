@@ -1,18 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../theme/colors';
 import {
   getClients,
-  getClientAppointmentStats,
-  getNextClientAppointment,
+  getAppointmentsBetween,
+  getAppointmentsByDate,
+  updateAppointment,
   getClientAppointmentNotes
 } from '../database/database';
 
@@ -22,26 +24,20 @@ import EditClientModal from '../components/clients/EditClientModal';
 
 const pencilIcon = require('../../assets/icons/pencil.png');
 
-const formatDate = (date) =>
-  new Date(date + 'T00:00:00').toLocaleDateString('es-CR', {
-    weekday: 'long',
+const formatDateTime = (date, time) =>
+  new Date(`${date}T${time}`).toLocaleString('es-CR', {
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
-    year: 'numeric'
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
   });
 
 export default function ClientsScreen() {
   const [clients, setClients] = useState([]);
   const [activeClient, setActiveClient] = useState(null);
 
-  const [stats, setStats] = useState({
-    total: 0,
-    confirmed: 0,
-    pending: 0,
-    canceled: 0
-  });
-
-  const [nextAppointment, setNextAppointment] = useState(null);
+  const [futureAppointments, setFutureAppointments] = useState([]);
   const [notesList, setNotesList] = useState([]);
 
   const [showPicker, setShowPicker] = useState(false);
@@ -56,11 +52,43 @@ export default function ClientsScreen() {
     }
   };
 
-  const loadHistory = async (client) => {
+  const loadClientData = async (client) => {
     if (!client) return;
-    setStats(await getClientAppointmentStats(client.id));
-    setNextAppointment(await getNextClientAppointment(client.id));
-    setNotesList(await getClientAppointmentNotes(client.id));
+
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const future = '2100-01-01';
+
+    const all = await getAppointmentsBetween(today, future);
+
+    const upcoming = all
+      .filter(
+        a =>
+          a.client_id === client.id &&
+          new Date(`${a.date}T${a.time}`) >= now
+      )
+      .sort(
+        (a, b) =>
+          new Date(`${a.date}T${a.time}`) -
+          new Date(`${b.date}T${b.time}`)
+      );
+
+    setFutureAppointments(upcoming);
+
+    const rawNotes = await getClientAppointmentNotes(client.id);
+    const cleaned = [
+      ...new Set(
+        rawNotes
+          .map(n => n.notes)
+          .filter(
+            n =>
+              n &&
+              n.trim() !== '' &&
+              n.toLowerCase() !== 'continuación'
+          )
+      )
+    ];
+    setNotesList(cleaned);
   };
 
   useEffect(() => {
@@ -69,9 +97,57 @@ export default function ClientsScreen() {
 
   useEffect(() => {
     if (activeClient) {
-      loadHistory(activeClient);
+      loadClientData(activeClient);
     }
   }, [activeClient]);
+
+  const changeStatus = async (appt, status) => {
+    if (status === 'confirmed' && appt.status === 'canceled') {
+      const sameSlot = await getAppointmentsByDate(appt.date);
+      const conflict = sameSlot.find(
+        a =>
+          a.time === appt.time &&
+          a.id !== appt.id &&
+          (a.status === 'confirmed' || a.status === 'pending')
+      );
+      if (conflict) {
+        Alert.alert(
+          'No disponible',
+          'Ya existe otra cita activa en este horario.'
+        );
+        return;
+      }
+    }
+
+    await updateAppointment(appt.id, status, appt.notes);
+    loadClientData(activeClient);
+  };
+
+  const statusColor = (status) => {
+    switch (status) {
+      case 'confirmed':
+        return Colors.confirmed;
+      case 'pending':
+        return Colors.pending;
+      case 'canceled':
+        return Colors.canceled;
+      default:
+        return Colors.primary;
+    }
+  };
+
+  const statusLabel = (status) => {
+  switch (status) {
+    case 'confirmed':
+      return 'Confirmado';
+    case 'pending':
+      return 'Pendiente';
+    case 'canceled':
+      return 'Cancelado';
+    default:
+      return status;
+  }
+};
 
   return (
     <View style={styles.screen}>
@@ -90,17 +166,15 @@ export default function ClientsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {activeClient && (
           <>
-            {/* INFO + EDIT ICON */}
+            {/* INFO */}
             <View style={styles.infoRow}>
               <TouchableOpacity
                 style={styles.editIcon}
                 onPress={() => setShowEditClient(true)}
-                activeOpacity={0.7}
               >
                 <Image
                   source={pencilIcon}
                   style={styles.editIconImage}
-                  resizeMode="contain"
                 />
               </TouchableOpacity>
 
@@ -111,7 +185,6 @@ export default function ClientsScreen() {
                     {activeClient.phone}
                   </Text>
                 </Text>
-
                 <Text style={styles.label}>
                   Correo:{' '}
                   <Text style={styles.value}>
@@ -121,33 +194,61 @@ export default function ClientsScreen() {
               </View>
             </View>
 
-            {/* NEXT APPOINTMENT */}
-            <View style={styles.nextAppointment}>
-              <Text style={styles.nextTitle}>Próxima cita:</Text>
-              <Text style={styles.nextDate}>
-                {nextAppointment
-                  ? `${formatDate(nextAppointment.date)} · ${nextAppointment.time}`
-                  : '—'}
-              </Text>
-            </View>
+            {/* UPCOMING APPOINTMENTS */}
+            <Text style={styles.sectionTitle}>Próximas citas</Text>
+            <View style={styles.appointmentsBox}>
+              {futureAppointments.length === 0 ? (
+                <Text style={styles.empty}>—</Text>
+              ) : (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                >
+                  {futureAppointments.map(appt => (
+                    <View
+                      key={appt.id}
+                      style={[
+                        styles.appointmentRow,
+                        { backgroundColor: statusColor(appt.status) }
+                      ]}
+                    >
+                      <Text style={styles.appointmentDate}>
+                        {formatDateTime(appt.date, appt.time)}
+                      </Text>
 
-            {/* STATS */}
-            <View style={styles.statsRow}>
-              <StatBox label="Total" value={stats.total} color={Colors.primary} />
-              <StatBox label="Confirmado" value={stats.confirmed} color={Colors.confirmed} />
-              <StatBox label="Pendiente" value={stats.pending} color={Colors.pending} />
-              <StatBox label="Cancelado" value={stats.canceled} color={Colors.canceled} />
+                      <View style={styles.actionsRow}>
+                        {['confirmed', 'pending', 'canceled'].map(s => (
+                          <TouchableOpacity
+                            key={s}
+                            onPress={() => changeStatus(appt, s)}
+                          >
+                            <Text
+                              style={[
+                                styles.action,
+                                appt.status === s && styles.actionActive
+                              ]}
+                            >
+                              {statusLabel(s)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             {/* NOTES */}
-            <Text style={styles.sectionTitle}>Servicios / Notas:</Text>
+            <Text style={styles.sectionTitle}>
+              Servicios / Notas
+            </Text>
             <View style={styles.notesBox}>
               {notesList.length === 0 ? (
-                <Text style={styles.notesText}>—</Text>
+                <Text style={styles.empty}>—</Text>
               ) : (
                 notesList.map((n, i) => (
                   <Text key={i} style={styles.notesText}>
-                    • {n.notes}
+                    • {n}
                   </Text>
                 ))
               )}
@@ -200,14 +301,9 @@ export default function ClientsScreen() {
   );
 }
 
-function StatBox({ label, value, color }) {
-  return (
-    <View style={[styles.statBox, { backgroundColor: color }]}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
+/* =========================
+   STYLES
+========================= */
 
 const styles = StyleSheet.create({
   screen: {
@@ -238,7 +334,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12
+    marginBottom: 16
   },
   editIcon: {
     width: 48,
@@ -267,52 +363,51 @@ const styles = StyleSheet.create({
     color: Colors.primary
   },
 
-  nextAppointment: {
-    backgroundColor: Colors.primary,
-    borderRadius: 20,
-    padding: 16,
-    marginVertical: 16,
-    alignItems: 'center'
-  },
-  nextTitle: {
-    fontFamily: 'Montserrat-Regular',
-    color: Colors.white
-  },
-  nextDate: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 16,
-    color: Colors.white,
-    marginTop: 4,
-    textAlign: 'center'
-  },
-
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20
-  },
-  statBox: {
-    width: '23%',
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: 'center'
-  },
-  statValue: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 20,
-    color: Colors.white
-  },
-  statLabel: {
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 12,
-    color: Colors.white
-  },
-
   sectionTitle: {
     fontFamily: 'Montserrat-SemiBold',
     fontSize: 16,
     marginBottom: 8
   },
+
+  appointmentsBox: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 8,
+    height: 172,
+    marginBottom: 24
+  },
+  appointmentRow: {
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    alignItems: 'center'
+  },
+  appointmentDate: {
+    fontFamily: 'Montserrat-Bold',
+    color: Colors.white,
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  appointmentText: {
+    fontFamily: 'Montserrat-SemiBold'
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%'
+  },
+
+  action: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: Colors.white,
+    opacity: 0.7
+  },
+  actionActive: {
+    fontFamily: 'Montserrat-Bold',
+    opacity: 1,
+  },
+
   notesBox: {
     backgroundColor: Colors.white,
     borderRadius: 16,
@@ -322,6 +417,10 @@ const styles = StyleSheet.create({
   },
   notesText: {
     fontFamily: 'Montserrat-Regular'
+  },
+  empty: {
+    textAlign: 'center',
+    color: Colors.textSecondary
   },
 
   newClientButton: {

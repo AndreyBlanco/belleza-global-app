@@ -1,15 +1,52 @@
+// CreateAppointmentScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput
+  TextInput,
+  Alert,
+  ScrollView
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { StatusBar } from 'expo-status-bar';
 
 import { Colors } from '../theme/colors';
-import { getClients, insertAppointment } from '../database/database';
+import {
+  getClients,
+  insertAppointment,
+  getAppointmentsByDate
+} from '../database/database';
+import { getWorkHours } from '../database/settings';
+
+import ClientPickerModal from '../components/clients/ClientPickerModal';
+import TimePickerModal from '../components/appointments/TimePickerModal';
+import DurationPickerModal from '../components/appointments/DurationPickerModal';
+
+/* =========================
+   UTILITIES
+========================= */
+
+const buildTimes = (startTime, blocks) => {
+  const [h, m] = startTime.split(':').map(Number);
+  const times = [];
+  let minutes = h * 60 + m;
+
+  for (let i = 0; i < blocks; i++) {
+    const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
+    const mm = String(minutes % 60).padStart(2, '0');
+    times.push(`${hh}:${mm}`);
+    minutes += 15;
+  }
+  return times;
+};
+
+const isOutsideWorkHours = (time, start, end) =>
+  time < start || time >= end;
+
+/* =========================
+   SCREEN
+========================= */
 
 export default function CreateAppointmentScreen({
   date,
@@ -18,8 +55,18 @@ export default function CreateAppointmentScreen({
   onCancel
 }) {
   const [clients, setClients] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [workHours, setWorkHours] = useState(null);
+
   const [selectedClient, setSelectedClient] = useState(null);
   const [notes, setNotes] = useState('');
+
+  const [selectedTime, setSelectedTime] = useState(time);
+  const [blocks, setBlocks] = useState(1);
+
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
 
   const normalizedDate =
     typeof date === 'string'
@@ -27,132 +74,246 @@ export default function CreateAppointmentScreen({
       : new Date(date).toISOString().split('T')[0];
 
   useEffect(() => {
-    loadClients();
+    loadData();
   }, []);
 
-  const loadClients = async () => {
-    const data = await getClients();
-    setClients(data);
+  const loadData = async () => {
+    setClients(await getClients());
+    setAppointments(await getAppointmentsByDate(normalizedDate));
+    setWorkHours(await getWorkHours());
   };
 
-  const saveAppointment = async () => {
+  const validateAndSave = async () => {
     if (!selectedClient) return;
 
-    await insertAppointment(
-      selectedClient,
-      normalizedDate,
-      time,
-      notes
-    );
+    const times = buildTimes(selectedTime, blocks);
 
+    // ✅ Validar disponibilidad
+    for (const t of times) {
+      const conflict = appointments.find(
+        a =>
+          a.time === t &&
+          (a.status === 'confirmed' || a.status === 'pending')
+      );
+      if (conflict) {
+        Alert.alert(
+          'Horario no disponible',
+          `El bloque ${t} ya está ocupado.`
+        );
+        return;
+      }
+    }
+
+    // ✅ Advertir fuera de horario
+    const outside = workHours
+      ? times.some(t =>
+          isOutsideWorkHours(
+            t,
+            workHours.work_start,
+            workHours.work_end
+          )
+        )
+      : false;
+
+    if (outside) {
+      Alert.alert(
+        'Fuera de horario',
+        'Esta cita está fuera del horario laboral. ¿Deseas continuar?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Continuar', onPress: () => save(times) }
+        ]
+      );
+      return;
+    }
+
+    save(times);
+  };
+
+  const save = async (times) => {
+    for (let i = 0; i < times.length; i++) {
+      await insertAppointment(
+        selectedClient.id,
+        normalizedDate,
+        times[i],
+        i === 0 ? notes : 'Continuación'
+      );
+    }
     onSave();
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <View style={styles.screen}>
+      <StatusBar style="light" />
+
+      {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.title}>Nueva cita</Text>
-        <Text style={styles.subtitle}>
-          {normalizedDate} · {time}
-        </Text>
+        <Text style={styles.headerTitle}>Nueva cita</Text>
+        <Text style={styles.headerSubtitle}>{normalizedDate}</Text>
       </View>
 
-      {/* Cliente */}
-      <Text style={styles.label}>Cliente</Text>
-      <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={selectedClient}
-          onValueChange={value => setSelectedClient(value)}
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* CLIENTE */}
+        <Text style={styles.label}>Cliente</Text>
+        <TouchableOpacity
+          style={styles.selectBox}
+          onPress={() => setShowClientPicker(true)}
         >
-          <Picker.Item label="-- Seleccionar cliente --" value={null} />
-          {clients.map(client => (
-            <Picker.Item
-              key={client.id}
-              label={client.name}
-              value={client.id}
-            />
-          ))}
-        </Picker>
-      </View>
+          <Text style={styles.selectText}>
+            {selectedClient
+              ? selectedClient.name
+              : 'Seleccionar cliente'}
+          </Text>
+        </TouchableOpacity>
 
-      {/* Notas */}
-      <Text style={styles.label}>Servicio / Notas</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ej. Corte, Barba, Cejas..."
-        value={notes}
-        onChangeText={setNotes}
+        {/* HORA */}
+        <Text style={styles.label}>Hora de inicio</Text>
+        <TouchableOpacity
+          style={styles.selectBox}
+          onPress={() => setShowTimePicker(true)}
+        >
+          <Text style={styles.selectText}>
+            {selectedTime}
+          </Text>
+        </TouchableOpacity>
+
+        {/* DURACIÓN */}
+        <Text style={styles.label}>Duración</Text>
+        <TouchableOpacity
+          style={styles.selectBox}
+          onPress={() => setShowDurationPicker(true)}
+        >
+          <Text style={styles.selectText}>
+            {blocks * 15} minutos
+          </Text>
+        </TouchableOpacity>
+
+        {/* NOTAS */}
+        <Text style={styles.label}>Servicio / Notas</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ej. Corte, Barba, Cejas..."
+          value={notes}
+          onChangeText={setNotes}
+        />
+
+        {/* ACCIONES */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              !selectedClient && { opacity: 0.5 }
+            ]}
+            onPress={validateAndSave}
+            disabled={!selectedClient}
+          >
+            <Text style={styles.primaryButtonText}>
+              Guardar cita
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={onCancel}>
+            <Text style={styles.cancel}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* MODALS */}
+      <ClientPickerModal
+        visible={showClientPicker}
+        clients={clients}
+        onSelect={(client) => {
+          setSelectedClient(client);
+          setShowClientPicker(false);
+        }}
+        onClose={() => setShowClientPicker(false)}
       />
 
-      {/* Acciones */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            !selectedClient && { opacity: 0.5 }
-          ]}
-          onPress={saveAppointment}
-          disabled={!selectedClient}
-        >
-          <Text style={styles.buttonText}>Guardar cita</Text>
-        </TouchableOpacity>
+      <TimePickerModal
+        visible={showTimePicker}
+        value={selectedTime}
+        onSelect={setSelectedTime}
+        onClose={() => setShowTimePicker(false)}
+      />
 
-        <TouchableOpacity onPress={onCancel}>
-          <Text style={styles.cancel}>Cancelar</Text>
-        </TouchableOpacity>
-      </View>
+      <DurationPickerModal
+        visible={showDurationPicker}
+        value={blocks}
+        onSelect={setBlocks}
+        onClose={() => setShowDurationPicker(false)}
+      />
     </View>
   );
 }
 
+/* =========================
+   STYLES
+========================= */
+
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.background
+  },
+
+  header: {
+    backgroundColor: Colors.primary,
+    paddingTop: 32,
+    paddingBottom: 20,
+    alignItems: 'center'
+  },
+  headerTitle: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 18,
+    color: Colors.white
+  },
+  headerSubtitle: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 22,
+    color: Colors.white,
+    marginTop: 6
+  },
+
+  content: {
     padding: 20
   },
-  header: {
-    marginBottom: 24
-  },
-  title: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 24
-  },
-  subtitle: {
-    fontFamily: 'Montserrat-Regular',
-    color: Colors.textSecondary,
-    marginTop: 4
-  },
+
   label: {
     fontFamily: 'Montserrat-SemiBold',
     marginBottom: 8,
-    marginTop: 12
+    marginTop: 14
   },
-  pickerContainer: {
+
+  selectBox: {
     backgroundColor: Colors.white,
-    borderRadius: 12,
-    overflow: 'hidden'
+    borderRadius: 16,
+    padding: 14
   },
+  selectText: {
+    fontFamily: 'Montserrat-Regular',
+    color: Colors.textSecondary
+  },
+
   input: {
     backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     fontFamily: 'Montserrat-Regular'
   },
+
   actions: {
     marginTop: 30
   },
-  button: {
+  primaryButton: {
     backgroundColor: Colors.primary,
-    padding: 14,
-    borderRadius: 14,
+    borderRadius: 20,
+    paddingVertical: 16,
     alignItems: 'center'
   },
-  buttonText: {
-    color: Colors.white,
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 16
+  primaryButtonText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 18,
+    color: Colors.white
   },
   cancel: {
     textAlign: 'center',

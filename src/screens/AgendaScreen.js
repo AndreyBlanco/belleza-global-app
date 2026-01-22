@@ -7,13 +7,19 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../theme/colors';
 import { getAppointmentsByDate } from '../database/database';
+import { getWorkHours } from '../database/settings';
 
 import AgendaHeader from '../components/agenda/AgendaHeader';
 import DaySwipe from '../components/agenda/DaySwipe';
 import StatusFilter from '../components/agenda/StatusFilter';
 import TimeSlotItem from '../components/agenda/TimeSlotItem';
 import AppointmentModal from '../components/agenda/AppointmentModal';
+import CanceledSlotModal from '../components/agenda/CanceledSlotModal';
 import CreateAppointmentScreen from './CreateAppointmentScreen';
+
+/* =========================
+   UTILITIES
+========================= */
 
 const getLocalDateString = (date = new Date()) => {
   const y = date.getFullYear();
@@ -22,7 +28,7 @@ const getLocalDateString = (date = new Date()) => {
   return `${y}-${m}-${d}`;
 };
 
-const buildTimeSlots = (appointments, startHour = 9, endHour = 17) => {
+const buildTimeSlots = (appointments, startHour, endHour) => {
   const slots = [];
 
   for (let h = startHour; h < endHour; h++) {
@@ -69,6 +75,10 @@ const buildTimeSlots = (appointments, startHour = 9, endHour = 17) => {
   return slots;
 };
 
+/* =========================
+   SCREEN
+========================= */
+
 export default function AgendaScreen() {
   const [date, setDate] = useState(getLocalDateString());
   const [slots, setSlots] = useState([]);
@@ -76,29 +86,52 @@ export default function AgendaScreen() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [showCanceledModal, setShowCanceledModal] = useState(false);
 
-  
-  const handleSlotPress = (slot) => {
-    if (slot.status === 'available') {
-      setSelectedSlot(slot);
-      setCreating(true);
-    } else {
-      setSelectedSlot(slot);
-      setShowModal(true);
-    }
-  };
+  const [workStartHour, setWorkStartHour] = useState(9);
+  const [workEndHour, setWorkEndHour] = useState(17);
+
+  useEffect(() => {
+    loadWorkHours();
+  }, []);
 
   useEffect(() => {
     loadAgenda();
-  }, [date]);
+  }, [date, workStartHour, workEndHour]);
+
+  const loadWorkHours = async () => {
+    const hours = await getWorkHours();
+    setWorkStartHour(parseInt(hours.work_start.split(':')[0], 10));
+    setWorkEndHour(parseInt(hours.work_end.split(':')[0], 10));
+  };
 
   const loadAgenda = async () => {
     const appointments = await getAppointmentsByDate(date);
-    setSlots(buildTimeSlots(appointments));
+    setSlots(
+      buildTimeSlots(
+        appointments,
+        workStartHour,
+        workEndHour
+      )
+    );
   };
 
-  const filteredSlots =
-    filter === null ? slots : slots.filter(s => s.status === filter);
+  const handleSlotPress = (slot) => {
+    if (slot.status === 'confirmed' || slot.status === 'pending') {
+      setSelectedSlot(slot);
+      setShowModal(true);
+      return;
+    }
+
+    if (slot.status === 'canceled') {
+      setSelectedSlot(slot);
+      setShowCanceledModal(true);
+      return;
+    }
+
+    setSelectedSlot(slot);
+    setCreating(true);
+  };
 
   if (creating && selectedSlot) {
     return (
@@ -130,13 +163,10 @@ export default function AgendaScreen() {
       </View>
 
       <FlatList
-        data={filteredSlots}
+        data={filter === null ? slots : slots.filter(s => s.status === filter)}
         keyExtractor={(item) => item.time}
         renderItem={({ item }) => (
-          <TimeSlotItem
-            slot={item}
-            onPress={handleSlotPress}
-          />
+          <TimeSlotItem slot={item} onPress={handleSlotPress} />
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
@@ -152,6 +182,22 @@ export default function AgendaScreen() {
           await loadAgenda();
         }}
       />
+
+      <CanceledSlotModal
+        visible={showCanceledModal}
+        onReactivate={() => {
+          setShowCanceledModal(false);
+          setShowModal(true);
+        }}
+        onCreateNew={() => {
+          setShowCanceledModal(false);
+          setCreating(true);
+        }}
+        onClose={() => {
+          setShowCanceledModal(false);
+          setSelectedSlot(null);
+        }}
+      />
     </View>
   );
 }
@@ -159,14 +205,12 @@ export default function AgendaScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.background // ✅ #F4F4F4
+    backgroundColor: Colors.background
   },
-
   topSection: {
     paddingTop: 8,
     paddingBottom: 8
   },
-
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 120,

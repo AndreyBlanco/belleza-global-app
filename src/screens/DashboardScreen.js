@@ -1,3 +1,4 @@
+//DasboardScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -65,7 +66,7 @@ export default function DashboardScreen() {
       canceled: todayAppointments.filter(a => a.status === 'canceled').length
     });
 
-    setNextAppointments(await getNextAppointmentsToday(3));
+    setNextAppointments(await getNextAppointmentsToday(6));
 
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
@@ -108,9 +109,8 @@ export default function DashboardScreen() {
       </View>
 
       {/* CONTENT */}
-      <ScrollView
+      <View
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
       >
         {/* RESUMEN HOY */}
         <View style={styles.card}>
@@ -127,25 +127,31 @@ export default function DashboardScreen() {
         </View>
 
         {/* NEXT APPOINTMENTS */}
-        <View style={styles.card}>
+        <View 
+          style={[styles.card]}
+        >
           <Text style={styles.cardTitle}>Próximas citas</Text>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            style={[{height: 220}]}
+          >
+            {nextAppointments.map((a, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.appointment,
+                  { backgroundColor: Colors[a.status] }
+                ]}
+              >
+                <Text style={styles.time}>{a.time}</Text>
 
-          {nextAppointments.map((a, i) => (
-            <View
-              key={i}
-              style={[
-                styles.appointment,
-                { backgroundColor: Colors[a.status] }
-              ]}
-            >
-              <Text style={styles.time}>{a.time}</Text>
-
-              <View style={styles.appo}>
-                <Text style={styles.client}>{a.name}</Text>
-                <Text style={styles.service}>{a.notes}</Text>
+                <View style={styles.appo}>
+                  <Text style={styles.client}>{a.name}</Text>
+                  <Text style={styles.service}>{a.notes}</Text>
+                </View>
               </View>
-            </View>
-          ))}
+            ))}
+          </ScrollView>
         </View>
 
         {/* PERIOD COUNTS */}
@@ -158,7 +164,7 @@ export default function DashboardScreen() {
             <StatCard label="Esta semana" value={periodCounts.week} color={Colors.primary} />
           </View>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }

@@ -1,3 +1,4 @@
+// EditClientModal.js
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
@@ -5,10 +6,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet
+  StyleSheet,
+  Alert
 } from 'react-native';
 import { Colors } from '../../theme/colors';
-import { updateClient } from '../../database/database';
+import { updateClient, getClients } from '../../database/database';
 
 export default function EditClientModal({
   visible,
@@ -28,8 +30,29 @@ export default function EditClientModal({
     }
   }, [client]);
 
+  const nameExists = async (value) => {
+    const clients = await getClients();
+    const normalized = value.trim().toLowerCase();
+    return clients.some(
+      c =>
+        c.id !== client.id &&
+        c.name.trim().toLowerCase() === normalized
+    );
+  };
+
   const save = async () => {
-    if (!name || !phone) return;
+    if (!name || !phone) {
+      Alert.alert('Campos requeridos', 'Nombre y teléfono son obligatorios.');
+      return;
+    }
+
+    if (await nameExists(name)) {
+      Alert.alert(
+        'Nombre duplicado',
+        'Ya existe otro cliente con este nombre.'
+      );
+      return;
+    }
 
     await updateClient(
       client.id,
