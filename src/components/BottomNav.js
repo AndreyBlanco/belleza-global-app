@@ -1,14 +1,12 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { SvgUri } from 'react-native-svg';
-import { Asset } from 'expo-asset';
+import { View, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../theme/colors';
 
 const icons = {
-  dashboard: Asset.fromModule(require('../../assets/icons/home.svg')).uri,
-  agenda: Asset.fromModule(require('../../assets/icons/agenda.svg')).uri,
-  clients: Asset.fromModule(require('../../assets/icons/clients.svg')).uri
+  dashboard: require('../../assets/icons/home.png'),
+  agenda: require('../../assets/icons/agenda.png'),
+  clients: require('../../assets/icons/clients.png')
 };
 
 export default function BottomNav({ current, onChange }) {
@@ -23,11 +21,15 @@ export default function BottomNav({ current, onChange }) {
         onPress={() => onChange(screen)}
         activeOpacity={0.8}
       >
-        <SvgUri
-          uri={icons[screen]}
-          width={26}
-          height={26}
-          fill={isActive ? Colors.white : 'rgba(255,255,255,0.6)'}
+        <Image
+          source={icons[screen]}
+          style={[
+            styles.icon,
+            {
+              opacity: isActive ? 1 : 0.6
+            }
+          ]}
+          resizeMode="contain"
         />
       </TouchableOpacity>
     );
@@ -61,5 +63,9 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     alignItems: 'center'
+  },
+  icon: {
+    width: 26,
+    height: 26
   }
 });

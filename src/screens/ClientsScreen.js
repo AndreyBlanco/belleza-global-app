@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView
+  ScrollView,
+  Image
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SvgUri } from 'react-native-svg';
-import { Asset } from 'expo-asset';
 import { Colors } from '../theme/colors';
 import {
   getClients,
@@ -21,9 +20,7 @@ import ClientPickerModal from '../components/clients/ClientPickerModal';
 import NewClientModal from '../components/clients/NewClientModal';
 import EditClientModal from '../components/clients/EditClientModal';
 
-const pencilIcon = Asset.fromModule(
-  require('../../assets/icons/pencil.svg')
-).uri;
+const pencilIcon = require('../../assets/icons/pencil.png');
 
 const formatDate = (date) =>
   new Date(date + 'T00:00:00').toLocaleDateString('es-CR', {
@@ -100,7 +97,11 @@ export default function ClientsScreen() {
                 onPress={() => setShowEditClient(true)}
                 activeOpacity={0.7}
               >
-                <SvgUri uri={pencilIcon} width={26} height={26} />
+                <Image
+                  source={pencilIcon}
+                  style={styles.editIconImage}
+                  resizeMode="contain"
+                />
               </TouchableOpacity>
 
               <View style={styles.infoText}>
@@ -234,7 +235,6 @@ const styles = StyleSheet.create({
     padding: 20
   },
 
-  /* ✅ INFO ROW */
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -249,6 +249,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12
+  },
+  editIconImage: {
+    width: 24,
+    height: 24
   },
   infoText: {
     flex: 1
